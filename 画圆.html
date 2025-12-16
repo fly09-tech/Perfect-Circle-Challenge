@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>科技画圆挑战 - 固定正圆版</title>
+    <style>
+        /* 全局布局调整：左侧排名表 + 右侧游戏区 */
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            background: linear-gradient(to bottom, #000000, #0f0520);
+            color: #00ffff;
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+            position: relative; /* 新增：为水印容器提供定位参考 */
+        }
+
+        /* 水印样式 - 核心优化：字体缩小+横排不换行 */
+        .watermark {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none; /* 关键：水印不遮挡鼠标/触屏交互 */
+            z-index: 50; /* 层级介于游戏区和弹窗之间，不影响核心交互 */
+            opacity: 0.12; /* 低不透明度，不干扰主内容 */
+        }
+
+        .watermark-content {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            transform: rotate(30deg); /* 倾斜30° */
+            display: flex;
+            flex-wrap: wrap;
+            align-content: space-around;
+            justify-content: space-around;
+            font-size: 16px; /* 字体调小（原28px→16px） */
+            font-weight: bold;
+            color: #00ffff; /* 与主界面青色一致，视觉融合 */
+            letter-spacing: 1px; /* 微调字间距，避免拥挤 */
+            white-space: nowrap; /* 核心：强制文本不换行 */
+        }
+
+        .watermark-text {
+            width: 180px; /* 适配小字体的宽度 */
+            height: 100px; /* 适配小字体的高度 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden; /* 防止极端情况文本溢出 */
+        }
+
+        /* 左侧排名表格容器 */
+        #ranking-container {
+            width: 280px;
+            height: 100vh;
+            padding: 20px 10px;
+            background: rgba(0, 0, 30, 0.8);
+            border-right: 2px solid #00ffff;
+            box-shadow: 0 0 20px #00ffff inset;
+            flex-shrink: 0;
+            overflow-y: auto;
+            position: relative; /* 确保水印不会覆盖排名表背景 */
+            z-index: 1;
+        }
+
+        #ranking-title {
+            text-align: center;
+            color: #ff00ff;
+            text-shadow: 0 0 15px #ff00ff;
+            font-size: 20px;
+            margin-bottom: 15px;
+        }
+
+        /* 科技风格排名表格 */
+        #ranking-table {
+            width: 100%;
+            border-collapse: collapse;
+            color: #00ffff;
+            font-size: 16px;
+        }
+
+        #ranking-table th, #ranking-table td {
+            padding: 8px;
+            text-align: center;
+            border: 1px solid rgba(0, 255, 255, 0.5);
+        }
+
+        #ranking-table th {
+            color: #ff00ff;
+            text-shadow: 0 0 10px #ff00ff;
+            background: rgba(255, 0, 255, 0.1);
+        }
+
+        #ranking-table tr:nth-child(even) {
+            background: rgba(0, 255, 255, 0.05);
+        }
+
+        #ranking-table tr:hover {
+            background: rgba(255, 0, 255, 0.1);
+            box-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
+        }
+
+        /* 右侧游戏主容器 */
+        #game-wrapper {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 0 20px;
+            position: relative; /* 确保水印不会覆盖游戏区背景 */
+            z-index: 1;
+        }
+
+        header {
+            text-align: center;
+            padding: 8px 0;
+            flex-shrink: 0;
+        }
+
+        h1 {
+            font-size: 24px;
+            color: #ff00ff;
+            text-shadow: 0 0 15px #ff00ff;
+            margin: 0;
+        }
+
+        #game-container {
+            flex: 1;
+            position: relative;
+            width: 97vmin;
+            height: 97vmin;
+            max-width: 1200px;
+            max-height: 1200px;
+            align-self: center;
+            background-color: rgba(0, 0, 30, 0.7);
+            box-shadow: 0 0 30px #00ffff, inset 0 0 30px #ff00ff;
+            border: 2px solid #00ffff;
+            overflow: hidden;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            cursor: crosshair;
+        }
+
+        #reference-canvas { z-index: 1; } /* 参考正圆层 */
+        #draw-canvas { z-index: 2; } /* 用户绘制层 */
+
+        #controls {
+            padding: 10px 0;
+            text-align: center;
+            flex-shrink: 0;
+            background: rgba(0, 0, 30, 0.5);
+        }
+
+        .info-line {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 18px;
+            margin-bottom: 8px;
+            font-size: 18px;
+            font-weight: bold;
+            text-shadow: 0 0 10px #00ffff;
+        }
+
+        #message {
+            font-size: 17px;
+            color: #ff00ff;
+            text-shadow: 0 0 8px #ff00ff;
+            min-height: 24px;
+            margin: 8px 0;
+        }
+
+        .buttons {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        button {
+            padding: 8px 20px;
+            font-size: 16px;
+            background: transparent;
+            color: #ff00ff;
+            border: 1.5px solid #ff00ff;
+            border-radius: 10px;
+            cursor: pointer;
+            box-shadow: 0 0 15px #ff00ff;
+            transition: all 0.3s;
+        }
+
+        button:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 30px #ff00ff;
+            background: rgba(255, 0, 255, 0.1);
+        }
+
+        /* 滚动条美化（适配科技风格） */
+        #ranking-container::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        #ranking-container::-webkit-scrollbar-track {
+            background: rgba(0, 0, 30, 0.5);
+            border-radius: 3px;
+        }
+
+        #ranking-container::-webkit-scrollbar-thumb {
+            background: rgba(0, 255, 255, 0.6);
+            border-radius: 3px;
+            box-shadow: 0 0 5px #00ffff;
+        }
+
+        /* 新纪录弹窗样式 */
+        #record-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 100; /* 弹窗层级高于水印 */
+            width: 380px;
+            padding: 25px;
+            background: rgba(0, 0, 40, 0.95);
+            border: 2px solid #ff00ff;
+            border-radius: 15px;
+            box-shadow: 0 0 40px #ff00ff, inset 0 0 20px #00ffff;
+            display: none;
+        }
+
+        #modal-title {
+            text-align: center;
+            color: #ff00ff;
+            text-shadow: 0 0 15px #ff00ff;
+            font-size: 22px;
+            margin: 0 0 20px 0;
+        }
+
+        #record-input {
+            width: 100%;
+            padding: 12px;
+            font-size: 18px;
+            background: rgba(0, 0, 30, 0.8);
+            border: 1px solid #00ffff;
+            border-radius: 8px;
+            color: #00ffff;
+            outline: none;
+            box-shadow: 0 0 10px #00ffff inset;
+            margin-bottom: 20px;
+            box-sizing: border-box;
+        }
+
+        #record-input::placeholder {
+            color: rgba(0, 255, 255, 0.5);
+        }
+
+        .modal-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+        }
+
+        #modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 99; /* 遮罩层层级高于水印 */
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <!-- 水印容器 - 核心新增 -->
+    <div class="watermark">
+        <div class="watermark-content">
+            <!-- 重复水印文本，按比例铺满（数量适配小字体） -->
+            <div class="watermark-text">水印</div>
+            <div class="watermark-text">水印</div>
+            <div class="watermark-text">水印</div>
+            <div class="watermark-text">水印</div>
+            <div class="watermark-text">水印</div>
+            <div class="watermark-text">水印</div>
+            <div class="watermark-text">水印</div>
+            <div class="watermark-text">水印</div>
+            <div class="watermark-text">水印</div>
+            <div class="watermark-text">水印</div>
+            <div class="watermark-text">水印</div>
+            <div class="watermark-text">水印</div>
+            <div class="watermark-text">水印</div>
+            <div class="watermark-text">水印</div>
+            <div class="watermark-text">水印</div>
+            <div class="watermark-text">水印</div>
+        </div>
+    </div>
+
+    <!-- 左侧排名表格容器 -->
+    <div id="ranking-container">
+        <h2 id="ranking-title">历史高分排名</h2>
+        <table id="ranking-table">
+            <thead>
+                <tr>
+                    <th>排名</th>
+                    <th>玩家名称</th>
+                    <th>分数</th>
+                    <th>圆度</th>
+                </tr>
+            </thead>
+            <tbody id="ranking-body">
+                <!-- 排名数据动态生成 -->
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 右侧游戏主区域 -->
+    <div id="game-wrapper">
+        <header>
+            <h1>科技画圆挑战</h1>
+        </header>
+        <div id="game-container">
+            <canvas id="reference-canvas"></canvas>
+            <canvas id="draw-canvas"></canvas>
+        </div>
+        <div id="controls">
+            <div class="info-line">
+                <span id="score">总分数: 0</span>
+                <span id="roundness">圆度: 0.00%</span>
+                <span id="high-score">历史最高分: 0</span>
+            </div>
+            <div id="message">按住开始绘制</div>
+            <div class="buttons">
+                <button id="clear-btn">清空画布</button>
+                <button id="clear-ranking-btn">清空排名</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 新纪录弹窗 -->
+    <div id="modal-overlay"></div>
+    <div id="record-modal">
+        <h3 id="modal-title">恭喜！新纪录创造者！</h3>
+        <input type="text" id="record-input" placeholder="请输入你的名字（可输入汉字/数字/字母）" maxlength="10">
+        <div class="modal-buttons">
+            <button id="cancel-btn">取消</button>
+            <button id="confirm-btn">确定</button>
+        </div>
+    </div>
+
+    <audio id="bg-music" loop autoplay volume="0.3">
+        <source src="https://cdn.pixabay.com/download/audio/2022/08/15/audio_4e3d0a0a1b.mp3?filename=neon-gaming-144377.mp3" type="audio/mpeg">
+    </audio>
+    <script>
+        const container = document.getElementById('game-container');
+        const referenceCanvas = document.getElementById('reference-canvas');
+        const drawCanvas = document.getElementById('draw-canvas');
+        const referenceCtx = referenceCanvas.getContext('2d');
+        const drawCtx = drawCanvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const roundnessElement = document.getElementById('roundness');
+        const highScoreElement = document.getElementById('high-score');
+        const messageElement = document.getElementById('message');
+        const clearBtn = document.getElementById('clear-btn');
+        const clearRankingBtn = document.getElementById('clear-ranking-btn');
+        const rankingBody = document.getElementById('ranking-body');
+        const beepSound = new Audio("data:audio/wav;base64,//uQRAAAAWMSLwUIYAAsYkXgoQwAEaYLWfkWgAI0wWs/ItAAAGDgYtAgAyN+QWaAAihwMWm4G8QQRDiMcCBcH3Cc+CDv/7xA4Tvh9Rz/y8QADBwMWgQAZG/ILNAARQ4GLTcDeIIIhxGOBAuD7hOfBB3/94gcJ3w+o5/5eIAIAAAVwWgQAVQ2ORaIQwEMAJiDg95G4nQL7mQVWI6GwRcfsZAcsKkJvxgxEjzFUgfHoSQ9Qq7KNwqHwuB13MA4a1q/DmBrHgPcmjiGoh//EwC5nGPEmS4RcfkVKOhJf+WOgoxJclFz3kgn//dBA+ya1GhurNn8zb//9NNutNuhz31f////9vt///z+IdAEAAAK4LQIAKobHItEIYCGAExBwe8jcToF9zIKrEdDYIuP2MgOWFSE34wYiR5iqQPj0JIeoVdlG4VD4XA67mAcNa1fhzA1jwHuTRxDUQ//iYBczjHiTJcIuPyKlHQkv/LHQUYkuSi57yQT//ugC1BAQAAD8PLwYAAAAAAAACAAAAAAAABgAAAAAAAIAAAAAAAAAA");
+
+        // 弹窗元素
+        const recordModal = document.getElementById('record-modal');
+        const modalOverlay = document.getElementById('modal-overlay');
+        const recordInput = document.getElementById('record-input');
+        const cancelBtn = document.getElementById('cancel-btn');
+        const confirmBtn = document.getElementById('confirm-btn');
+
+        // 固定核心参数
+        let centerX, centerY;
+        const referenceRadius = 300;
+        let isDrawing = false;
+        let currentPath = [];
+        let canvasSize = 0;
+        let currentScore = 0;
+        let highScore = 0; // 历史最高分
+        let rankingList = []; // 排名列表（存储{name, score, roundness}）
+        let newRecordData = null; // 临时存储新纪录数据
+
+        // 初始化排名表格
+        function initRanking() {
+            highScore = 0;
+            rankingList = [];
+            highScoreElement.textContent = `历史最高分: ${highScore}`;
+            updateRankingTable();
+        }
+
+        // 更新排名表格
+        function updateRankingTable() {
+            // 清空表格内容
+            rankingBody.innerHTML = '';
+            
+            // 按分数降序排序，取前10条
+            const sortedRanking = [...rankingList]
+                .sort((a, b) => b.score - a.score)
+                .slice(0, 10);
+
+            // 生成表格行
+            sortedRanking.forEach((item, index) => {
+                const tr = document.createElement('tr');
+                
+                // 排名列（前3名特殊标记）
+                const rankTd = document.createElement('td');
+                rankTd.textContent = index + 1;
+                if (index === 0) rankTd.style.color = '#ffd700'; // 第一名金色
+                else if (index === 1) rankTd.style.color = '#c0c0c0'; // 第二名银色
+                else if (index === 2) rankTd.style.color = '#cd7f32'; // 第三名铜色
+                tr.appendChild(rankTd);
+
+                // 玩家名称列
+                const nameTd = document.createElement('td');
+                nameTd.textContent = item.name || '匿名玩家';
+                tr.appendChild(nameTd);
+
+                // 分数列
+                const scoreTd = document.createElement('td');
+                scoreTd.textContent = item.score;
+                tr.appendChild(scoreTd);
+
+                // 圆度列
+                const roundnessTd = document.createElement('td');
+                roundnessTd.textContent = `${item.roundness.toFixed(2)}%`;
+                tr.appendChild(roundnessTd);
+
+                rankingBody.appendChild(tr);
+            });
+
+            // 无数据时显示占位行
+            if (sortedRanking.length === 0) {
+                const tr = document.createElement('tr');
+                const td = document.createElement('td');
+                td.colSpan = 4;
+                td.textContent = '暂无记录';
+                td.style.color = 'rgba(0, 255, 255, 0.5)';
+                tr.appendChild(td);
+                rankingBody.appendChild(tr);
+            }
+        }
+
+        // 打开新纪录弹窗
+        function openRecordModal(score, roundness) {
+            newRecordData = { score, roundness };
+            recordInput.value = ''; // 清空输入框
+            recordModal.style.display = 'block';
+            modalOverlay.style.display = 'block';
+            recordInput.focus(); // 自动聚焦输入框
+        }
+
+        // 关闭新纪录弹窗
+        function closeRecordModal() {
+            recordModal.style.display = 'none';
+            modalOverlay.style.display = 'none';
+            newRecordData = null;
+        }
+
+        // 添加新分数到排名
+        function addToRanking(score, roundness, name = '匿名玩家') {
+            // 判断是否创历史新高
+            const isNewRecord = score > highScore;
+            
+            if (isNewRecord) {
+                highScore = score;
+                // 打开弹窗让用户输入名称
+                openRecordModal(score, roundness);
+            } else {
+                // 普通分数直接添加
+                rankingList.push({ name, score, roundness });
+                highScoreElement.textContent = `历史最高分: ${highScore}`;
+                updateRankingTable();
+            }
+        }
+
+        function resizeCanvas() {
+            const size = Math.min(container.clientWidth, container.clientHeight);
+            canvasSize = size;
+            referenceCanvas.width = size;
+            referenceCanvas.height = size;
+            drawCanvas.width = size;
+            drawCanvas.height = size;
+            centerX = canvasSize / 2;
+            centerY = canvasSize / 2;
+            drawReferenceCircle();
+        }
+
+        function drawReferenceCircle() {
+            referenceCtx.clearRect(0, 0, canvasSize, canvasSize);
+            referenceCtx.strokeStyle = 'rgba(0, 255, 255, 0.4)';
+            referenceCtx.lineWidth = 3;
+            referenceCtx.shadowBlur = 20;
+            referenceCtx.shadowColor = '#00ffff';
+            referenceCtx.beginPath();
+            referenceCtx.arc(centerX, centerY, referenceRadius, 0, Math.PI * 2);
+            referenceCtx.stroke();
+            referenceCtx.shadowBlur = 0;
+        }
+
+        function getMousePos(e) {
+            const rect = drawCanvas.getBoundingClientRect();
+            const scaleX = canvasSize / rect.width;
+            const scaleY = canvasSize / rect.height;
+            return {
+                x: (e.clientX - rect.left) * scaleX,
+                y: (e.clientY - rect.top) * scaleY
+            };
+        }
+
+        function getTouchPos(e) {
+            const rect = drawCanvas.getBoundingClientRect();
+            const touch = e.touches[0];
+            const scaleX = canvasSize / rect.width;
+            const scaleY = canvasSize / rect.height;
+            return {
+                x: (touch.clientX - rect.left) * scaleX,
+                y: (touch.clientY - rect.top) * scaleY
+            };
+        }
+
+        function startNewGame() {
+            resizeCanvas();
+            drawCtx.clearRect(0, 0, canvasSize, canvasSize);
+            currentPath = [];
+            messageElement.textContent = '按住开始绘制';
+            scoreElement.textContent = '总分数: 0';
+            roundnessElement.textContent = '圆度: 0.00%';
+            currentScore = 0;
+        }
+
+        // 实时计算圆度的核心函数
+        function calculateRealTimeRoundness(path) {
+            if (path.length < 5) return 0;
+            const xs = path.map(p => p.x);
+            const ys = path.map(p => p.y);
+            const minX = Math.min(...xs), maxX = Math.max(...xs);
+            const minY = Math.min(...ys), maxY = Math.max(...ys);
+            const userRadiusX = (maxX - minX) / 2;
+            const userRadiusY = (maxY - minY) / 2;
+            const roundnessRatio = Math.min(userRadiusX, userRadiusY) / (Math.max(userRadiusX, userRadiusY) || 1);
+            return roundnessRatio * 100;
+        }
+
+        // 判断是否为封闭图形（起点终点距离阈值为参考圆半径的5%）
+        function isClosedShape(path) {
+            if (path.length < 20) return false; // 笔迹过短直接判定未封闭
+            const start = path[0];
+            const end = path[path.length - 1];
+            const distance = Math.hypot(end.x - start.x, end.y - start.y);
+            return distance < referenceRadius * 0.05; // 距离小于15px视为封闭
+        }
+
+        // 计算笔迹绘制方向（返回1=顺时针，-1=逆时针，0=无方向）
+        function getDrawDirection(path) {
+            if (path.length < 10) return 0;
+            let sum = 0;
+            // 计算相邻三点的叉积和，判断整体旋转方向
+            for (let i = 1; i < path.length - 1; i++) {
+                const p0 = path[i - 1];
+                const p1 = path[i];
+                const p2 = path[i + 1];
+                // 向量叉积：(p1-p0) × (p2-p1)
+                const cross = (p1.x - p0.x) * (p2.y - p1.y) - (p1.y - p0.y) * (p2.x - p1.x);
+                sum += cross;
+            }
+            return sum > 0 ? -1 : sum < 0 ? 1 : 0; // 逆时针为-1，顺时针为1
+        }
+
+        // 检测绘制过程中是否出现方向反转
+        function hasDirectionReversal(path) {
+            if (path.length < 30) return false; // 笔迹过短不检测方向
+            const segmentLength = Math.floor(path.length / 3); // 分3段检测
+            // 第一段方向
+            const dir1 = getDrawDirection(path.slice(0, segmentLength));
+            // 第二段方向
+            const dir2 = getDrawDirection(path.slice(segmentLength, segmentLength * 2));
+            // 第三段方向
+            const dir3 = getDrawDirection(path.slice(segmentLength * 2));
+            
+            // 任意两段方向相反则判定为反转
+            return (dir1 !== 0 && dir2 !== 0 && dir1 !== dir2) || 
+                   (dir2 !== 0 && dir3 !== 0 && dir2 !== dir3) ||
+                   (dir1 !== 0 && dir3 !== 0 && dir1 !== dir3);
+        }
+
+        function isExtremeMessy(path) {
+            if (path.length < 20) return true;
+            const xs = path.map(p => p.x);
+            const ys = path.map(p => p.y);
+            const minX = Math.min(...xs), maxX = Math.max(...xs);
+            const minY = Math.min(...ys), maxY = Math.max(...ys);
+            const width = maxX - minX;
+            const height = maxY - minY;
+            if (width < referenceRadius * 0.1 || height < referenceRadius * 0.1) return true;
+            return false;
+        }
+
+        function calculateFinalScore() {
+            // 1. 基础判定：过短/乱画
+            if (currentPath.length < 10) {
+                messageElement.textContent = '画得太短了~';
+                beepSound.currentTime = 0;
+                beepSound.play();
+                return;
+            }
+            if (isExtremeMessy(currentPath)) {
+                scoreElement.textContent = '总分数: 0';
+                roundnessElement.textContent = '圆度: 0.00%';
+                messageElement.textContent = '乱画打屁屁哦！😜';
+                beepSound.currentTime = 0;
+                beepSound.play();
+                return;
+            }
+
+            // 2. 新增判定：未封闭/方向反转
+            if (!isClosedShape(currentPath) || hasDirectionReversal(currentPath)) {
+                scoreElement.textContent = '总分数: 0';
+                roundnessElement.textContent = '圆度: 0.00%';
+                messageElement.textContent = '这好像不是一个圆哦！';
+                beepSound.currentTime = 0;
+                beepSound.play();
+                return;
+            }
+
+            // 3. 正常评分逻辑
+            const xs = currentPath.map(p => p.x);
+            const ys = currentPath.map(p => p.y);
+            const minX = Math.min(...xs), maxX = Math.max(...xs);
+            const minY = Math.min(...ys), maxY = Math.max(...ys);
+            const userCenterX = (minX + maxX) / 2;
+            const userCenterY = (minY + maxY) / 2;
+            const userRadiusX = (maxX - minX) / 2;
+            const userRadiusY = (maxY - minY) / 2;
+            const userRadius = (userRadiusX + userRadiusY) / 2;
+            const centerDiff = Math.hypot(userCenterX - centerX, userCenterY - centerY);
+            const radiusDiff = Math.abs(userRadius - referenceRadius);
+            const roundnessRatio = Math.min(userRadiusX, userRadiusY) / Math.max(userRadiusX, userRadiusY || 1);
+            const roundnessScore = roundnessRatio * 100;
+            const centerScore = Math.max(0, 100 - centerDiff * 0.5);
+            const radiusScore = Math.max(0, 100 - radiusDiff * 0.3);
+            const shapeScore = roundnessScore;
+            currentScore = Math.round((centerScore * 0.3 + radiusScore * 0.4 + shapeScore * 0.3));
+            
+            // 更新显示
+            roundnessElement.textContent = `圆度: ${roundnessScore.toFixed(2)}%`;
+            scoreElement.textContent = `总分数: ${currentScore}`;
+            
+            // 添加到排名列表
+            addToRanking(currentScore, roundnessScore);
+
+            // 反馈信息
+            const feedback = currentScore >= 90 ? '完美！🔥' :
+                             currentScore >= 75 ? '优秀！⚡' :
+                             currentScore >= 55 ? '不错！💻' :
+                             currentScore >= 30 ? '继续努力！😊' :
+                             '再练习就能更好啦~';
+            messageElement.textContent = `得分: ${currentScore} 分！ ${feedback}`;
+            beepSound.currentTime = 0;
+            beepSound.play();
+        }
+
+        // 绘制事件 - 开始绘制
+        drawCanvas.addEventListener('mousedown', (e) => {
+            isDrawing = true;
+            currentPath = [getMousePos(e)];
+            messageElement.textContent = '绘制中...';
+        });
+
+        // 绘制事件 - 移动画笔（实时更新圆度）
+        drawCanvas.addEventListener('mousemove', (e) => {
+            if (!isDrawing) return;
+            const pos = getMousePos(e);
+            currentPath.push(pos);
+            const prev = currentPath[currentPath.length - 2];
+            const grad = drawCtx.createLinearGradient(prev.x, prev.y, pos.x, pos.y);
+            grad.addColorStop(0, '#00ffff');
+            grad.addColorStop(0.5, '#ff00ff');
+            grad.addColorStop(1, '#00ffcc');
+            drawCtx.strokeStyle = grad;
+            drawCtx.lineWidth = 3;
+            drawCtx.lineCap = 'round';
+            drawCtx.shadowBlur = 10;
+            drawCtx.shadowColor = '#00ffff';
+            drawCtx.beginPath();
+            drawCtx.moveTo(prev.x, prev.y);
+            drawCtx.lineTo(pos.x, pos.y);
+            drawCtx.stroke();
+            drawCtx.shadowBlur = 0;
+
+            // 实时计算并更新圆度
+            const realTimeRoundness = calculateRealTimeRoundness(currentPath);
+            roundnessElement.textContent = `圆度: ${realTimeRoundness.toFixed(2)}%`;
+        });
+
+        // 结束绘制
+        function endDrawing() {
+            if (isDrawing) {
+                isDrawing = false;
+                calculateFinalScore();
+            }
+        }
+
+        drawCanvas.addEventListener('mouseup', endDrawing);
+        drawCanvas.addEventListener('mouseout', endDrawing);
+
+        // 触屏支持 - 开始绘制
+        drawCanvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            isDrawing = true;
+            currentPath = [getTouchPos(e)];
+            messageElement.textContent = '绘制中...';
+        });
+
+        // 触屏支持 - 移动画笔（实时更新圆度）
+        drawCanvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (!isDrawing) return;
+            const pos = getTouchPos(e);
+            currentPath.push(pos);
+            const prev = currentPath[currentPath.length - 2];
+            const grad = drawCtx.createLinearGradient(prev.x, prev.y, pos.x, pos.y);
+            grad.addColorStop(0, '#00ffff');
+            grad.addColorStop(0.5, '#ff00ff');
+            grad.addColorStop(1, '#00ffcc');
+            drawCtx.strokeStyle = grad;
+            drawCtx.lineWidth = 3;
+            drawCtx.lineCap = 'round';
+            drawCtx.shadowBlur = 10;
+            drawCtx.shadowColor = '#00ffff';
+            drawCtx.beginPath();
+            drawCtx.moveTo(prev.x, prev.y);
+            drawCtx.lineTo(pos.x, pos.y);
+            drawCtx.stroke();
+            drawCtx.shadowBlur = 0;
+
+            // 实时计算并更新圆度（触屏端同步）
+            const realTimeRoundness = calculateRealTimeRoundness(currentPath);
+            roundnessElement.textContent = `圆度: ${realTimeRoundness.toFixed(2)}%`;
+        });
+
+        drawCanvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            endDrawing();
+        });
+
+        // 清空画布按钮事件
+        clearBtn.addEventListener('click', () => {
+            drawCtx.clearRect(0, 0, canvasSize, canvasSize);
+            currentPath = [];
+            messageElement.textContent = '画布已清空';
+            scoreElement.textContent = '总分数: 0';
+            roundnessElement.textContent = '圆度: 0.00%';
+            currentScore = 0;
+        });
+
+        // 清空排名按钮事件
+        clearRankingBtn.addEventListener('click', () => {
+            initRanking();
+            messageElement.textContent = '排名已清空';
+        });
+
+        // 弹窗取消按钮事件（清空输入内容）
+        cancelBtn.addEventListener('click', () => {
+            recordInput.value = ''; // 清空输入框
+            closeRecordModal();
+            // 取消后仍添加匿名记录
+            if (newRecordData) {
+                rankingList.push({
+                    name: '匿名玩家',
+                    score: newRecordData.score,
+                    roundness: newRecordData.roundness
+                });
+                highScoreElement.textContent = `历史最高分: ${highScore} (新纪录！)`;
+                updateRankingTable();
+            }
+        });
+
+        // 弹窗确定按钮事件（保存输入内容）
+        confirmBtn.addEventListener('click', () => {
+            const userName = recordInput.value.trim() || '匿名玩家';
+            if (newRecordData) {
+                rankingList.push({
+                    name: userName,
+                    score: newRecordData.score,
+                    roundness: newRecordData.roundness
+                });
+                highScoreElement.textContent = `历史最高分: ${highScore} (新纪录！)`;
+                updateRankingTable();
+            }
+            closeRecordModal();
+        });
+
+        // 点击遮罩层关闭弹窗
+        modalOverlay.addEventListener('click', () => {
+            closeRecordModal();
+            // 遮罩层关闭也添加匿名记录
+            if (newRecordData) {
+                rankingList.push({
+                    name: '匿名玩家',
+                    score: newRecordData.score,
+                    roundness: newRecordData.roundness
+                });
+                highScoreElement.textContent = `历史最高分: ${highScore} (新纪录！)`;
+                updateRankingTable();
+            }
+        });
+
+        window.addEventListener('resize', startNewGame);
+        
+        // 初始化
+        initRanking();
+        startNewGame();
+    </script>
+</body>
+</html>
